@@ -4,6 +4,8 @@ zotero:
   include_path: null # A list of glob patterns marking the Zotero collections that should be included. Example: ["2026/survey/**","2026/reading-group/**"]
   ignore_path: null # A list of glob patterns marking the Zotero collections that should be excluded. Example: ["2026/ignore/**","archive/**"]
 
+profiles: null # Optional list of email groups. Each item may define name/include_path/ignore_path/max_paper_num. Example: [{name: "LLM", include_path: ["LLM", "LLM/**"]}]
+
 source:
   arxiv:
     category: null # The categories of target arxiv papers. Find the abbr of your research area from [here](https://arxiv.org/category_taxonomy). Example: ["cs.AI","cs.CV","cs.LG","cs.CL"]

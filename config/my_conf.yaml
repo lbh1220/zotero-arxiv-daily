@@ -1,0 +1,48 @@
+zotero:
+  user_id: ${oc.env:ZOTERO_ID}
+  api_key: ${oc.env:ZOTERO_KEY}
+  include_path: null
+  ignore_path: null
+
+profiles:
+  - name: "mobile robot + Research"
+    include_path: ["mobile robot", "mobile robot/**", "Research", "Research/**"]
+  - name: "Aircraft in city + UAM and UAS"
+    include_path: ["Aircraft in city", "Aircraft in city/**", "UAM and UAS", "UAM and UAS/**"]
+  - name: "autonomous driving"
+    include_path: ["autonomous driving", "autonomous driving/**"]
+  - name: "LLM"
+    include_path: ["LLM", "LLM/**"]
+
+
+email:
+  sender: ${oc.env:SENDER}
+  receiver: ${oc.env:RECEIVER}
+  smtp_server: smtp.qq.com
+  smtp_port: 465
+  sender_password: ${oc.env:SENDER_PASSWORD}
+
+llm:
+  api:
+    key: ${oc.env:OPENAI_API_KEY}
+    base_url: ${oc.env:OPENAI_API_BASE}
+  generation_kwargs:
+    model: Qwen/Qwen2.5-7B-Instruct
+
+source:
+  arxiv:
+    category: ["cs.AI","cs.CV","cs.LG","cs.RO"]
+    include_cross_list: false # Set to true to include arXiv cross-list papers in these categories.
+
+reranker:
+  api:
+    key: ${oc.env:OPENAI_API_KEY}
+    base_url: ${oc.env:OPENAI_API_BASE}
+    model: BAAI/bge-m3
+    batch_size: 50
+
+executor:
+  debug: ${oc.env:DEBUG,null}
+  send_empty: false
+  source: ['arxiv']
+  reranker: api

@@ -59,3 +59,28 @@ def test_main_debug_logging(config, monkeypatch):
 
     main_mod.main.__wrapped__(config)
     # If we get here without error, the debug path executed successfully
+
+
+def test_main_uses_batch_executor_when_profiles_present(config, monkeypatch):
+    from omegaconf import open_dict
+
+    calls = []
+
+    class FakeBatchExecutor:
+        def __init__(self, cfg):
+            calls.append(("init", cfg))
+
+        def run(self):
+            calls.append(("run",))
+
+    with open_dict(config):
+        config.profiles = [{"name": "LLM", "include_path": ["LLM", "LLM/**"]}]
+
+    monkeypatch.setattr("zotero_arxiv_daily.main.BatchExecutor", FakeBatchExecutor)
+
+    from zotero_arxiv_daily import main as main_mod
+
+    main_mod.main.__wrapped__(config)
+
+    assert ("init", config) in calls
+    assert ("run",) in calls

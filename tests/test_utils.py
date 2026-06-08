@@ -1,5 +1,6 @@
 """Tests for zotero_arxiv_daily.utils: glob_match, send_email, tex extraction."""
 
+import email
 import smtplib
 import tarfile
 import io
@@ -184,6 +185,17 @@ def test_send_email_falls_back_to_plain(config, monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP_SSL", StubSMTP_SSL_Fails)
     send_email(config, "<html>plain</html>")
     assert len(sent) == 1
+
+
+def test_send_email_accepts_custom_subject(config, monkeypatch):
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+    send_email(config, "<html>hello</html>", subject="Daily arXiv - LLM - 2026/06/08")
+    assert len(sent) == 1
+    _, _, body = sent[0]
+    message = email.message_from_string(body)
+    subject = str(email.header.make_header(email.header.decode_header(message["Subject"])))
+    assert subject == "Daily arXiv - LLM - 2026/06/08"
 
 
 # ---------------------------------------------------------------------------

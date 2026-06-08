@@ -5,6 +5,7 @@ from omegaconf import DictConfig
 import hydra
 from loguru import logger
 import dotenv
+from zotero_arxiv_daily.batch_executor import BatchExecutor
 from zotero_arxiv_daily.executor import Executor
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 dotenv.load_dotenv()
@@ -28,7 +29,8 @@ def main(config:DictConfig):
     if config.executor.debug:
         logger.info("Debug mode is enabled")
     
-    executor = Executor(config)
+    executor_cls = BatchExecutor if config.get("profiles") else Executor
+    executor = executor_cls(config)
     executor.run()
 
 if __name__ == '__main__':

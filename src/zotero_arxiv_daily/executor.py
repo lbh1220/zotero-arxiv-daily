@@ -13,18 +13,23 @@ from openai import OpenAI
 from tqdm import tqdm
 
 
-def normalize_path_patterns(patterns: list[str] | ListConfig | None, config_key: str) -> list[str] | None:
+def normalize_path_patterns(
+    patterns: list[str] | ListConfig | None,
+    config_key: str,
+    *,
+    config_prefix: str = "zotero",
+) -> list[str] | None:
     if patterns is None:
         return None
 
     if not isinstance(patterns, (list, ListConfig)):
         raise TypeError(
-            f"config.zotero.{config_key} must be a list of glob patterns or null, "
+            f"config.{config_prefix}.{config_key} must be a list of glob patterns or null, "
             'for example ["2026/survey/**"]. Single strings are not supported.'
         )
 
     if any(not isinstance(pattern, str) for pattern in patterns):
-        raise TypeError(f"config.zotero.{config_key} must contain only glob pattern strings.")
+        raise TypeError(f"config.{config_prefix}.{config_key} must contain only glob pattern strings.")
 
     return list(patterns)
 
@@ -63,39 +68,45 @@ class Executor:
         ) for c in corpus]
     
     def filter_corpus(self, corpus:list[CorpusPaper]) -> list[CorpusPaper]:
-        if self.include_path_patterns:
-            logger.info(f"Selecting zotero papers matching include_path: {self.include_path_patterns}")
+        return self.filter_corpus_with_patterns(
+            corpus,
+            self.include_path_patterns,
+            self.ignore_path_patterns,
+        )
+
+    def filter_corpus_with_patterns(
+        self,
+        corpus: list[CorpusPaper],
+        include_path_patterns: list[str] | None,
+        ignore_path_patterns: list[str] | None,
+    ) -> list[CorpusPaper]:
+        if include_path_patterns:
+            logger.info(f"Selecting zotero papers matching include_path: {include_path_patterns}")
             corpus = [
                 c for c in corpus
                 if any(
                     glob_match(path, pattern)
                     for path in c.paths
-                    for pattern in self.include_path_patterns
+                    for pattern in include_path_patterns
                 )
             ]
-        if self.ignore_path_patterns:
-            logger.info(f"Excluding zotero papers matching ignore_path: {self.ignore_path_patterns}")
+        if ignore_path_patterns:
+            logger.info(f"Excluding zotero papers matching ignore_path: {ignore_path_patterns}")
             corpus = [
                 c for c in corpus
                 if not any(
                     glob_match(path, pattern)
                     for path in c.paths
-                    for pattern in self.ignore_path_patterns
+                    for pattern in ignore_path_patterns
                 )
             ]
-        if self.include_path_patterns or self.ignore_path_patterns:
+        if include_path_patterns or ignore_path_patterns:
             samples = random.sample(corpus, min(5, len(corpus)))
             samples = '\n'.join([c.title + ' - ' + '\n'.join(c.paths) for c in samples])
             logger.info(f"Selected {len(corpus)} zotero papers:\n{samples}\n...")
         return corpus
 
-    
-    def run(self):
-        corpus = self.fetch_zotero_corpus()
-        corpus = self.filter_corpus(corpus)
-        if len(corpus) == 0:
-            logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
-            return
+    def retrieve_all_papers(self):
         all_papers = []
         for source, retriever in self.retrievers.items():
             logger.info(f"Retrieving {source} papers...")
@@ -106,19 +117,41 @@ class Executor:
             logger.info(f"Retrieved {len(papers)} {source} papers")
             all_papers.extend(papers)
         logger.info(f"Total {len(all_papers)} papers retrieved from all sources")
+        return all_papers
+
+    def rerank_papers(self, all_papers, corpus, max_paper_num=None):
+        logger.info("Reranking papers...")
+        reranked_papers = self.reranker.rerank(all_papers, corpus)
+        limit = max_paper_num if max_paper_num is not None else self.config.executor.max_paper_num
+        return reranked_papers[:limit]
+
+    def enrich_papers(self, reranked_papers):
+        logger.info("Generating TLDR and affiliations...")
+        for p in tqdm(reranked_papers):
+            if p.tldr is None:
+                p.generate_tldr(self.openai_client, self.config.llm)
+            if p.affiliations is None:
+                p.generate_affiliations(self.openai_client, self.config.llm)
+
+    def send_recommendation_email(self, reranked_papers, subject: str | None = None):
+        logger.info("Sending email...")
+        email_content = render_email(reranked_papers)
+        send_email(self.config, email_content, subject=subject)
+        logger.info("Email sent successfully")
+
+    
+    def run(self):
+        corpus = self.fetch_zotero_corpus()
+        corpus = self.filter_corpus(corpus)
+        if len(corpus) == 0:
+            logger.error(f"No zotero papers found. Please check your zotero settings:\n{self.config.zotero}")
+            return
+        all_papers = self.retrieve_all_papers()
         reranked_papers = []
         if len(all_papers) > 0:
-            logger.info("Reranking papers...")
-            reranked_papers = self.reranker.rerank(all_papers, corpus)
-            reranked_papers = reranked_papers[:self.config.executor.max_paper_num]
-            logger.info("Generating TLDR and affiliations...")
-            for p in tqdm(reranked_papers):
-                p.generate_tldr(self.openai_client, self.config.llm)
-                p.generate_affiliations(self.openai_client, self.config.llm)
+            reranked_papers = self.rerank_papers(all_papers, corpus)
+            self.enrich_papers(reranked_papers)
         elif not self.config.executor.send_empty:
             logger.info("No new papers found. No email will be sent.")
             return
-        logger.info("Sending email...")
-        email_content = render_email(reranked_papers)
-        send_email(self.config, email_content)
-        logger.info("Email sent successfully")
+        self.send_recommendation_email(reranked_papers)

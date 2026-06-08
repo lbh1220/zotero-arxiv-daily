@@ -4,11 +4,17 @@ All mocking uses pytest monkeypatch + SimpleNamespace. No unittest.mock.
 """
 
 import copy
+import sys
 
 import pytest
 from hydra import compose, initialize_config_dir
 from hydra.core.global_hydra import GlobalHydra
 from pathlib import Path
+
+_ROOT_DIR = Path(__file__).resolve().parent.parent
+_SRC_DIR = _ROOT_DIR / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 _CONFIG_DIR = str(Path(__file__).resolve().parent.parent / "config")
 
