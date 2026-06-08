@@ -7,10 +7,13 @@ zotero:
 profiles:
   - name: "mobile robot + Research"
     include_path: ["mobile robot", "mobile robot/**", "Research", "Research/**"]
+    max_paper_num: 15
   - name: "Aircraft in city + UAM and UAS"
     include_path: ["Aircraft in city", "Aircraft in city/**", "UAM and UAS", "UAM and UAS/**"]
+    max_paper_num: 15
   - name: "autonomous driving"
     include_path: ["autonomous driving", "autonomous driving/**"]
+    max_paper_num: 15
   - name: "LLM"
     include_path: ["LLM", "LLM/**"]
 
