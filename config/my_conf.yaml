@@ -16,6 +16,7 @@ profiles:
     max_paper_num: 15
   - name: "LLM"
     include_path: ["LLM", "LLM/**"]
+    max_paper_num: 10
 
 
 email:
