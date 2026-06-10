@@ -36,7 +36,7 @@ def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
         pid = entry.id.removeprefix("oai:arXiv.org:")
         fake_results.append(SimpleNamespace(
             title=entry.title,
-            authors=[SimpleNamespace(name="Test Author")],
+            authors=[SimpleNamespace(name="Test Author", affiliation=["Test University"])],
             summary="Test abstract",
             pdf_url=f"https://arxiv.org/pdf/{pid}",
             entry_id=f"https://arxiv.org/abs/{pid}",
@@ -51,16 +51,26 @@ def test_arxiv_retriever(config, mock_feedparser, monkeypatch):
 
     monkeypatch.setattr(arxiv_retriever.arxiv, "Client", FakeClient)
 
-    # Skip file downloads in convert_to_paper
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_html", lambda paper: None)
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_pdf", lambda paper: None)
-    monkeypatch.setattr(arxiv_retriever, "extract_text_from_tar", lambda paper: None)
-
     retriever = ArxivRetriever(config)
     papers = retriever.retrieve_papers()
 
     assert len(papers) == len(new_entries)
     assert set(p.title for p in papers) == set(e.title for e in new_entries)
+    assert all(p.abstract == "Test abstract" for p in papers)
+    assert all(p.affiliations == ["Test University"] for p in papers)
+    assert all(p.full_text is None for p in papers)
+
+
+def test_collect_author_affiliations_deduplicates_and_ignores_empty():
+    authors = [
+        SimpleNamespace(name="A", affiliation=["MIT", ""]),
+        SimpleNamespace(name="B", affiliation=["MIT", "Stanford"]),
+        SimpleNamespace(name="C", affiliation=[]),
+    ]
+
+    affiliations = arxiv_retriever._collect_author_affiliations(authors)
+
+    assert affiliations == ["MIT", "Stanford"]
 
 
 def test_run_with_hard_timeout_returns_value():

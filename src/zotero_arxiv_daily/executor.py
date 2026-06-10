@@ -10,7 +10,6 @@ from .reranker import get_reranker_cls
 from .construct_email import render_email
 from .utils import send_email
 from openai import OpenAI
-from tqdm import tqdm
 
 
 def normalize_path_patterns(
@@ -43,7 +42,9 @@ class Executor:
             source: get_retriever_cls(source)(config) for source in config.executor.source
         }
         self.reranker = get_reranker_cls(config.executor.reranker)(config)
-        self.openai_client = OpenAI(api_key=config.llm.api.key, base_url=config.llm.api.base_url)
+        # Daily emails now rely on arXiv metadata + abstracts only.
+        # Keep the attribute for compatibility, but skip constructing a client.
+        self.openai_client = None
     def fetch_zotero_corpus(self) -> list[CorpusPaper]:
         logger.info("Fetching zotero corpus")
         zot = zotero.Zotero(self.config.zotero.user_id, 'user', self.config.zotero.api_key)
@@ -126,12 +127,7 @@ class Executor:
         return reranked_papers[:limit]
 
     def enrich_papers(self, reranked_papers):
-        logger.info("Generating TLDR and affiliations...")
-        for p in tqdm(reranked_papers):
-            if p.tldr is None:
-                p.generate_tldr(self.openai_client, self.config.llm)
-            if p.affiliations is None:
-                p.generate_affiliations(self.openai_client, self.config.llm)
+        logger.info("Skipping TLDR generation; using abstracts and arXiv metadata affiliations only.")
 
     def send_recommendation_email(self, reranked_papers, subject: str | None = None):
         logger.info("Sending email...")

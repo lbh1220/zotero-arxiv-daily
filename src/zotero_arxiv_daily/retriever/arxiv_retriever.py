@@ -21,6 +21,18 @@ PDF_EXTRACT_TIMEOUT = 180
 TAR_EXTRACT_TIMEOUT = 180
 
 
+def _collect_author_affiliations(authors: list[Any]) -> list[str] | None:
+    seen = set()
+    affiliations = []
+    for author in authors:
+        for affiliation in getattr(author, "affiliation", []) or []:
+            normalized = str(affiliation).strip()
+            if normalized and normalized not in seen:
+                seen.add(normalized)
+                affiliations.append(normalized)
+    return affiliations or None
+
+
 def _download_file(url: str, path: str) -> None:
     with requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT) as response:
         response.raise_for_status()
@@ -161,11 +173,6 @@ class ArxivRetriever(BaseRetriever):
         authors = [a.name for a in raw_paper.authors]
         abstract = raw_paper.summary
         pdf_url = raw_paper.pdf_url
-        full_text = extract_text_from_tar(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_html(raw_paper)
-        if full_text is None:
-            full_text = extract_text_from_pdf(raw_paper)
         return Paper(
             source=self.name,
             title=title,
@@ -173,7 +180,7 @@ class ArxivRetriever(BaseRetriever):
             abstract=abstract,
             url=raw_paper.entry_id,
             pdf_url=pdf_url,
-            full_text=full_text,
+            affiliations=_collect_author_affiliations(raw_paper.authors),
         )
 
 

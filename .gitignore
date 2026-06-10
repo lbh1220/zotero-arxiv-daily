@@ -17,3 +17,7 @@ models
 test-compose.yml
 outputs
 config/private.yaml
+data/
+input_sample/
+results/
+config/my_matcher_id.yaml
