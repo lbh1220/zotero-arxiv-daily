@@ -52,7 +52,38 @@ def get_empty_html():
   """
   return block_template
 
-def get_block_html(title:str, authors:str, rate:str, abstract:str, pdf_url:str, affiliations:str=None):
+def _get_arxiv_html_url(paper: Paper) -> str | None:
+    if paper.source != "arxiv" or not paper.url:
+        return None
+    if "arxiv.org/abs/" not in paper.url:
+        return None
+    return paper.url.replace("/abs/", "/html/", 1)
+
+
+def get_block_html(
+    title: str,
+    authors: str,
+    rate: str,
+    abstract: str,
+    pdf_url: str | None,
+    affiliations: str | None = None,
+    html_url: str | None = None,
+):
+    link_parts = []
+    if pdf_url:
+        link_parts.append(
+            f'<a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; '
+            'font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; '
+            'border-radius: 4px; margin-right: 8px;">PDF</a>'
+        )
+    if html_url:
+        link_parts.append(
+            f'<a href="{html_url}" style="display: inline-block; text-decoration: none; font-size: 14px; '
+            'font-weight: bold; color: #fff; background-color: #5b8c5a; padding: 8px 16px; '
+            'border-radius: 4px;">HTML</a>'
+        )
+    links_html = "".join(link_parts)
+
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -80,12 +111,19 @@ def get_block_html(title:str, authors:str, rate:str, abstract:str, pdf_url:str, 
 
     <tr>
         <td style="padding: 8px 0;">
-            <a href="{pdf_url}" style="display: inline-block; text-decoration: none; font-size: 14px; font-weight: bold; color: #fff; background-color: #d9534f; padding: 8px 16px; border-radius: 4px;">PDF</a>
+            {links_html}
         </td>
     </tr>
 </table>
 """
-    return block_template.format(title=title, authors=authors, rate=rate, abstract=abstract, pdf_url=pdf_url, affiliations=affiliations)
+    return block_template.format(
+        title=title,
+        authors=authors,
+        rate=rate,
+        abstract=abstract,
+        affiliations=affiliations,
+        links_html=links_html,
+    )
 
 def get_stars(score:float):
     full_star = '<span class="full-star">⭐</span>'
@@ -125,7 +163,17 @@ def render_email(papers:list[Paper]) -> str:
                 affiliations += ', ...'
         else:
             affiliations = 'Unknown Affiliation'
-        parts.append(get_block_html(p.title, authors, rate, p.abstract, p.pdf_url, affiliations))
+        parts.append(
+            get_block_html(
+                p.title,
+                authors,
+                rate,
+                p.abstract,
+                p.pdf_url,
+                affiliations,
+                html_url=_get_arxiv_html_url(p),
+            )
+        )
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'
     return framework.replace('__CONTENT__', content)

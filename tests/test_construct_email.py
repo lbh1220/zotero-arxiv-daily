@@ -10,6 +10,8 @@ def test_render_email_with_papers():
     assert "Sample Paper Title" in html
     assert "A great abstract." in html
     assert "MIT" in html
+    assert "HTML" in html
+    assert "https://arxiv.org/html/2026.00001" in html
 
 
 def test_render_email_empty_list():
@@ -64,13 +66,21 @@ def test_get_stars_mid_score():
 
 
 def test_get_block_html_contains_all_fields():
-    html = get_block_html("Title", "Auth", "3.5", "Abstract text", "http://pdf.url", "MIT")
+    html = get_block_html("Title", "Auth", "3.5", "Abstract text", "http://pdf.url", "MIT", "http://html.url")
     assert "Title" in html
     assert "Auth" in html
     assert "3.5" in html
     assert "Abstract text" in html
     assert "http://pdf.url" in html
+    assert "http://html.url" in html
     assert "MIT" in html
+
+
+def test_render_email_omits_html_button_for_non_arxiv_sources():
+    paper = make_sample_paper(source="biorxiv", url="https://example.com/paper", pdf_url="https://example.com/paper.pdf")
+    html = render_email([paper])
+    assert "paper.pdf" in html
+    assert ">HTML<" not in html
 
 
 def test_get_empty_html():
