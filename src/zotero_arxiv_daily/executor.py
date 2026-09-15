@@ -132,8 +132,11 @@ class Executor:
     def send_recommendation_email(self, reranked_papers, subject: str | None = None):
         logger.info("Sending email...")
         email_content = render_email(reranked_papers)
-        send_email(self.config, email_content, subject=subject)
-        logger.info("Email sent successfully")
+        refused = send_email(self.config, email_content, subject=subject)
+        if refused:
+            logger.warning(f"Email sent with {len(refused)} refused recipient(s)")
+        else:
+            logger.info("Email sent successfully")
 
     
     def run(self):

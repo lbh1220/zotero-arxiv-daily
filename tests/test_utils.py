@@ -125,13 +125,18 @@ class TestGlobMatch:
 def test_send_email_starttls_success(config, monkeypatch):
     sent = []
     monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
-    send_email(config, "<html>hello</html>")
+    refused = send_email(config, "<html>hello</html>")
     assert len(sent) == 1
+    assert refused == {}
     sender, recipients, body = sent[0]
     assert sender == "test@example.com"
     assert recipients == ["test@example.com"]
     # Body is a full MIME message (base64-encoded). Check the raw MIME string.
     assert "text/html" in body
+    message = email.message_from_string(body)
+    assert message["Date"] is not None
+    assert message["Message-ID"] is not None
+    assert message["Message-ID"].endswith("@example.com>")
 
 
 def test_send_email_falls_back_to_ssl(config, monkeypatch):
@@ -174,6 +179,7 @@ def test_send_email_falls_back_to_plain(config, monkeypatch):
             pass
         def sendmail(self, s, r, m):
             sent.append((s, r, m))
+            return {}
         def quit(self):
             pass
 
@@ -196,6 +202,30 @@ def test_send_email_accepts_custom_subject(config, monkeypatch):
     message = email.message_from_string(body)
     subject = str(email.header.make_header(email.header.decode_header(message["Subject"])))
     assert subject == "Daily arXiv - LLM - 2026/06/08"
+
+
+def test_send_email_returns_refused_recipients(config, monkeypatch):
+    refused = {"bad@example.com": (550, b"Rejected")}
+
+    class StubSMTP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def starttls(self):
+            pass
+
+        def login(self, user, password):
+            pass
+
+        def sendmail(self, sender, recipients, msg):
+            return refused
+
+        def quit(self):
+            pass
+
+    monkeypatch.setattr(smtplib, "SMTP", StubSMTP)
+
+    assert send_email(config, "<html>hello</html>") == refused
 
 
 # ---------------------------------------------------------------------------

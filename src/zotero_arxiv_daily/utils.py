@@ -6,7 +6,7 @@ import smtplib
 from collections import Counter
 from email.header import Header
 from email.mime.text import MIMEText
-from email.utils import parseaddr, formataddr
+from email.utils import parseaddr, formataddr, formatdate, make_msgid
 from loguru import logger
 import datetime
 from omegaconf import DictConfig
@@ -139,7 +139,27 @@ def glob_match(path:str, pattern:str) -> bool:
     re_pattern = glob.translate(pattern,recursive=True)
     return re.match(re_pattern, path) is not None
 
-def send_email(config:DictConfig, html:str, subject:str | None = None):
+def _mask_email(addr: str) -> str:
+    name, email_addr = parseaddr(addr)
+    if "@" not in email_addr:
+        return name or "unknown"
+
+    local, domain = email_addr.rsplit("@", 1)
+    if len(local) <= 2:
+        masked_local = local[:1] + "***"
+    else:
+        masked_local = f"{local[0]}***{local[-1]}"
+    return f"{masked_local}@{domain}"
+
+
+def _message_id_domain(sender: str) -> str:
+    _, email_addr = parseaddr(sender)
+    if "@" not in email_addr:
+        return "zotero-arxiv-daily.local"
+    return email_addr.rsplit("@", 1)[1]
+
+
+def send_email(config:DictConfig, html:str, subject:str | None = None) -> dict:
     sender = config.email.sender
     receiver = config.email.receiver
     password = config.email.sender_password
@@ -156,6 +176,8 @@ def send_email(config:DictConfig, html:str, subject:str | None = None):
         today = datetime.datetime.now().strftime('%Y/%m/%d')
         subject = f'Daily arXiv {today}'
     msg['Subject'] = Header(subject, 'utf-8').encode()
+    msg['Date'] = formatdate(localtime=True)
+    msg['Message-ID'] = make_msgid(domain=_message_id_domain(sender))
 
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)
@@ -168,6 +190,18 @@ def send_email(config:DictConfig, html:str, subject:str | None = None):
             logger.debug(f"Failed to use SSL. {e}\nTry to use plain text.")
             server = smtplib.SMTP(smtp_server, smtp_port)
 
-    server.login(sender, password)
-    server.sendmail(sender, [receiver], msg.as_string())
-    server.quit()
+    try:
+        server.login(sender, password)
+        refused = server.sendmail(sender, [receiver], msg.as_string()) or {}
+    finally:
+        server.quit()
+
+    if refused:
+        refused_recipients = ", ".join(_mask_email(recipient) for recipient in refused)
+        logger.warning(
+            "SMTP reported refused recipients for message_id="
+            f"{msg['Message-ID']}: {refused_recipients}"
+        )
+    else:
+        logger.info(f"SMTP accepted message_id={msg['Message-ID']} for all recipients")
+    return refused

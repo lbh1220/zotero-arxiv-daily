@@ -127,6 +127,7 @@ email:
   smtp_server: ??? # The SMTP server that sends the email. Ask your email provider (Gmail, QQ, Outlook, ...) for its SMTP server. Example: smtp.qq.com
   smtp_port: ??? # The port of SMTP server. Example: 465
   sender_password: ??? # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
+  profile_send_delay_seconds: 60 # Seconds to wait between profile emails in batch mode. Set to 0 to disable. Example: 60
 
 llm:
   api:

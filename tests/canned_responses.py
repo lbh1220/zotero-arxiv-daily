@@ -152,6 +152,7 @@ def make_stub_smtp(sent_emails: list):
 
         def sendmail(self, sender, recipients, msg):
             sent_emails.append((sender, recipients, msg))
+            return {}
 
         def quit(self):
             pass

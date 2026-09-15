@@ -9,6 +9,12 @@ from tests.canned_responses import make_sample_paper, make_stub_openai_client, m
 from zotero_arxiv_daily.batch_executor import BatchExecutor
 
 
+@pytest.fixture(autouse=True)
+def no_profile_send_delay(config):
+    with open_dict(config):
+        config.email.profile_send_delay_seconds = 0
+
+
 def _extract_subject(raw_message: str) -> str:
     message = email.message_from_string(raw_message)
     return str(email.header.make_header(email.header.decode_header(message["Subject"])))
@@ -60,6 +66,49 @@ def test_batch_executor_sends_one_email_per_profile(config, monkeypatch):
     subjects = [_extract_subject(body) for _, _, body in sent]
     assert any("Group A" in subject for subject in subjects)
     assert any("Group B" in subject for subject in subjects)
+
+
+def test_batch_executor_waits_between_profile_emails(config, monkeypatch):
+    import smtplib
+
+    with open_dict(config):
+        config.email.profile_send_delay_seconds = 2
+        config.profiles = [
+            {
+                "name": "Group A",
+                "include_path": ["survey", "survey/**"],
+            },
+            {
+                "name": "Group B",
+                "include_path": ["survey/topic-a", "survey/topic-a/**"],
+            },
+        ]
+
+    stub_zot = make_stub_zotero_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+
+    stub_client = make_stub_openai_client()
+    monkeypatch.setattr("zotero_arxiv_daily.reranker.api.OpenAI", lambda **kw: stub_client)
+
+    import zotero_arxiv_daily.retriever.arxiv_retriever  # noqa: F401
+    from zotero_arxiv_daily.retriever.base import registered_retrievers
+
+    monkeypatch.setattr(
+        registered_retrievers["arxiv"],
+        "retrieve_papers",
+        lambda self: [make_sample_paper(title="Paper 1")],
+    )
+
+    sent = []
+    delays = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+    monkeypatch.setattr("zotero_arxiv_daily.batch_executor.sleep", delays.append)
+
+    executor = BatchExecutor(config)
+    executor.run()
+
+    assert len(sent) == 2
+    assert delays == [2.0]
 
 
 def test_batch_executor_continues_after_profile_failure_and_raises_at_end(config, monkeypatch):

@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import sleep
 
 from loguru import logger
 from omegaconf import DictConfig
@@ -68,7 +69,8 @@ class BatchExecutor(Executor):
             return
 
         failures = []
-        for profile in self.profiles:
+        send_delay = max(0.0, float(self.config.email.get("profile_send_delay_seconds", 60)))
+        for index, profile in enumerate(self.profiles):
             profile_name = profile["name"]
             logger.info(f"Processing profile: {profile_name}")
             try:
@@ -96,6 +98,9 @@ class BatchExecutor(Executor):
                     reranked_papers,
                     subject=self._build_subject(profile_name),
                 )
+                if send_delay > 0 and index < len(self.profiles) - 1:
+                    logger.info(f"Waiting {send_delay}s before sending the next profile email")
+                    sleep(send_delay)
             except Exception as exc:
                 logger.exception(f'Profile "{profile_name}" failed')
                 failures.append((profile_name, str(exc)))
