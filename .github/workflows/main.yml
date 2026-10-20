@@ -2,7 +2,9 @@ name: Send emails daily
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 1 * * *'
+    # Use an uncommon minute to reduce GitHub Actions schedule queueing.
+    # Changing the cron also re-registers a schedule disabled by GitHub.
+    - cron: '37 1 * * *'
 
 jobs:
   calculate-and-send:
