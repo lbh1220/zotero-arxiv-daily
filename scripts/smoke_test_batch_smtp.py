@@ -60,6 +60,8 @@ def build_config(smtp_port: int):
     cfg.email.smtp_server = "127.0.0.1"
     cfg.email.smtp_port = smtp_port
     cfg.email.sender_password = "test"
+    # This diagnostic exercises per-profile SMTP failures and send delays.
+    cfg.email.merge_profiles = False
     cfg.llm.api.key = "sk-fake"
     cfg.llm.api.base_url = "http://localhost:30000/v1"
     cfg.llm.generation_kwargs.model = "gpt-4o-mini"

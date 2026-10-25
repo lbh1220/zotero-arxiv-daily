@@ -128,6 +128,7 @@ email:
   smtp_port: ??? # The port of SMTP server. Example: 465
   sender_password: ??? # The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this. Example: abcdefghijklmn
   profile_send_delay_seconds: 60 # Seconds to wait between profile emails in batch mode. Set to 0 to disable. Example: 60
+  merge_profiles: true # Merge profile selections into one deduplicated daily email.
 
 llm:
   api:
@@ -159,6 +160,17 @@ executor:
   source: ??? # The sources of papers to retrieve. Example: ['arxiv','biorxiv','medrxiv']
   reranker: local # The reranker to use. Example: 'local' or 'api'
 ```
+
+When `profiles` are configured, the default `email.merge_profiles: true` sends one
+daily digest after all profiles finish. Each profile retains its own `max_paper_num`
+(falling back to `executor.max_paper_num`); their selections are combined and
+deduplicated by paper URL/arXiv ID, including arXiv version and PDF URL variants.
+Each paper shows its matching profiles and their individual scores. The digest is
+sorted by the highest score across matching profiles, with no additional global
+paper limit. For example, limits of 15, 15, 15 and 10 produce at most 55 unique papers.
+If a profile fails, successful results are still mailed with `INCOMPLETE` in the
+subject, and the workflow reports failure. Set `email.merge_profiles: false` to
+restore separate profile emails and the delay between them.
 
 That's all! Now you can test the workflow by manually triggering it:
 ![test](./assets/test.png)

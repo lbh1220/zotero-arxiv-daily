@@ -1,4 +1,5 @@
 from .protocol import Paper
+from html import escape
 import math
 
 
@@ -68,7 +69,15 @@ def get_block_html(
     pdf_url: str | None,
     affiliations: str | None = None,
     html_url: str | None = None,
+    matched_profiles: dict[str, float | None] | None = None,
 ):
+    profiles_html = ""
+    if matched_profiles:
+        labels = [
+            f"{escape(name)} ({score:.1f})" if score is not None else escape(name)
+            for name, score in matched_profiles.items()
+        ]
+        profiles_html = "<br><strong>Matched profiles:</strong> " + "; ".join(labels)
     link_parts = []
     if pdf_url:
         link_parts.append(
@@ -101,6 +110,7 @@ def get_block_html(
     <tr>
         <td style="font-size: 14px; color: #333; padding: 8px 0;">
             <strong>Relevance:</strong> {rate}
+            {profiles_html}
         </td>
     </tr>
     <tr>
@@ -123,6 +133,7 @@ def get_block_html(
         abstract=abstract,
         affiliations=affiliations,
         links_html=links_html,
+        profiles_html=profiles_html,
     )
 
 def get_stars(score:float):
@@ -172,6 +183,7 @@ def render_email(papers:list[Paper]) -> str:
                 p.pdf_url,
                 affiliations,
                 html_url=_get_arxiv_html_url(p),
+                matched_profiles=p.matched_profiles,
             )
         )
 

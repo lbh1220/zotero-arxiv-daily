@@ -19,6 +19,13 @@ def test_render_email_empty_list():
     assert "No Papers Today" in html
 
 
+def test_render_email_shows_profile_scores_and_escapes_names():
+    paper = make_sample_paper(score=8.5, matched_profiles={"Robots & <AI>": 8.5, "LLM": 6.2})
+    html = render_email([paper])
+    assert "Robots &amp; &lt;AI&gt; (8.5)" in html
+    assert "LLM (6.2)" in html
+
+
 def test_render_email_author_truncation():
     authors = [f"Author {i}" for i in range(10)]
     paper = make_sample_paper(authors=authors, score=7.0, abstract="ok")

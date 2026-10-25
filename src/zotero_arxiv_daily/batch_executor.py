@@ -1,10 +1,46 @@
+from copy import copy
 from datetime import datetime
+import re
 from time import sleep
+from urllib.parse import urlsplit
 
 from loguru import logger
 from omegaconf import DictConfig
 
 from .executor import Executor, normalize_path_patterns
+from .protocol import Paper
+
+
+def _paper_key(paper: Paper) -> tuple[str, str]:
+    """Treat arXiv URL variants and versions as the same paper."""
+    url = urlsplit(paper.url or paper.pdf_url or "")
+    if paper.source == "arxiv" and (url.hostname or "").lower() in {
+        "arxiv.org", "www.arxiv.org", "export.arxiv.org",
+    }:
+        paper_id = re.sub(r"^/(?:abs|pdf|html)/", "", url.path).rstrip("/")
+        paper_id = re.sub(r"(?:v\d+)?(?:\.pdf)?$", "", paper_id)
+        return paper.source, paper_id
+    return paper.source, paper.url or paper.pdf_url or " ".join(paper.title.casefold().split())
+
+
+def merge_profile_results(results: list[tuple[str, list[Paper]]]) -> list[Paper]:
+    """Union profile selections, keeping every match and the highest score."""
+    merged = {}
+    for name, papers in results:
+        for paper in papers:
+            key = _paper_key(paper)
+            if key not in merged:
+                merged[key] = copy(paper)
+                merged[key].matched_profiles = {}
+            entry = merged[key]
+            entry.matched_profiles[name] = paper.score
+            if paper.score is not None and (entry.score is None or paper.score > entry.score):
+                entry.score = paper.score
+    return sorted(
+        merged.values(),
+        key=lambda paper: paper.score if paper.score is not None else float("-inf"),
+        reverse=True,
+    )
 
 
 class BatchExecutor(Executor):
@@ -69,6 +105,8 @@ class BatchExecutor(Executor):
             return
 
         failures = []
+        merge_profiles = self.config.email.get("merge_profiles", True)
+        profile_results = []
         send_delay = max(0.0, float(self.config.email.get("profile_send_delay_seconds", 60)))
         for index, profile in enumerate(self.profiles):
             profile_name = profile["name"]
@@ -94,6 +132,11 @@ class BatchExecutor(Executor):
                     )
                     self.enrich_papers(reranked_papers)
 
+                if merge_profiles:
+                    # Rerankers mutate shared Paper scores on every profile.
+                    profile_results.append((profile_name, [copy(p) for p in reranked_papers]))
+                    continue
+
                 self.send_recommendation_email(
                     reranked_papers,
                     subject=self._build_subject(profile_name),
@@ -104,6 +147,16 @@ class BatchExecutor(Executor):
             except Exception as exc:
                 logger.exception(f'Profile "{profile_name}" failed')
                 failures.append((profile_name, str(exc)))
+
+        if merge_profiles and profile_results:
+            papers = merge_profile_results(profile_results)
+            today = datetime.now().strftime("%Y/%m/%d")
+            warning = "; INCOMPLETE" if failures else ""
+            subject = (
+                f"Daily arXiv - {len(papers)} papers "
+                f"({len(profile_results)}/{len(self.profiles)} profiles{warning}) - {today}"
+            )
+            self.send_recommendation_email(papers, subject=subject)
 
         if failures:
             failure_summary = "; ".join(f"{name}: {reason}" for name, reason in failures)
